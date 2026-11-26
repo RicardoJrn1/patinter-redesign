@@ -120,10 +120,14 @@ export function IntroLogo({
 }) {
   return (
     <div data-intro aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-svh">
-      {/* the black screen; it gives way to the page underneath */}
+      {/* the black screen; it gives way to the page underneath. As tall as the LARGEST viewport (lvh),
+          not the box (svh): on phones the first swipe hides the browser's toolbars and the screen
+          grows taller, and a curtain of the small height would let the page show under it while the
+          logo is still on its way. The box, and so the logo's place, stays the small height;
+          min-h-full keeps the curtain whole where lvh is not understood. */}
       <div
         data-intro-curtain
-        className="absolute inset-0 bg-ink"
+        className="absolute inset-x-0 top-0 h-lvh min-h-full bg-ink"
         style={INTRO_MODE === "disintegrate" ? IRIS_STYLE : undefined}
       />
 
