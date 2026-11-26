@@ -1,26 +1,575 @@
 @import "tailwindcss";
+@import "lenis/dist/lenis.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ------------------------------------------------------------------ design tokens
+   Patinter identity: warm paper backgrounds, ink/graphite text, the fleet orange and the wordmark
+   red used only as accents. */
+@theme {
+  --color-paper: #f6f4ef; /* warm white — page background */
+  --color-paper-2: #eeebe4; /* off-white — alternate bands */
+  --color-mist: #e4e0d8; /* very light grey — surfaces */
+  --color-ink: #141414; /* primary text */
+  --color-graphite: #2b2b2c; /* secondary text, dark surfaces */
+  --color-muted: #6b6963; /* captions, meta */
+  --color-line: rgb(20 20 20 / 0.12); /* hairlines */
+  --color-line-strong: rgb(20 20 20 / 0.24);
+  --color-orange: #f28c00; /* fleet orange (UI accent) */
+  --color-orange-deep: #d97706;
+  --color-red: #eb2d37; /* official logo red (logo_topo.png) — large accents only */
+  --color-red-deep: #c4222b; /* red for small text (AA on paper) */
+  --color-yellow: #f5d713; /* logo comet yellow — logo only */
+
+  /* The hero's stage and the header over it (Direção C — contraste dividido). Kept apart from the
+     tokens above on purpose: the opening's black screen is bg-ink, and it must not change a shade. */
+  --color-chalk: #f4f1eb; /* off-white stage */
+  --color-coal: #171717; /* graphite stage */
+  --color-ash: #b5b1a8; /* secondary text on coal (8.4:1) */
+  --color-smoke: #8f8b83; /* captions on coal (5.3:1) */
+  --color-signal: #e52d36; /* red accents — graphics and display type only (3.9:1 on chalk) */
+  --color-comet: #f5d21a; /* yellow accents — on coal, or as a small mark next to red */
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+
+  --breakpoint-xs: 30rem;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
+/* ------------------------------------------------------------------ base */
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --header-h: 4.5rem;
+    --gutter: clamp(1.25rem, 4.2vw, 4rem);
+    /* The header's floating island and the hero's photographs share one frame: the same inset from
+       the screen's edges and the same corner radius, so they read as one system. The inset is also
+       assumed by the opening (IntroLogo.tsx, headerLogoBox: the island sits 0.75rem lower) and the
+       radius by the photographs' clip-paths (hero-chapters.ts, PHOTO_RADIUS): change them together. */
+    --island-inset: 0.75rem;
+    --island-radius: 1.5rem;
+    /* The stage grid the pinned sections share (Hero.tsx, Fleet.tsx): the band at the bottom of the
+       screen (indicator, signature), the frame column on the photograph's side — its top sits one
+       inset under the island (inset + header + 2px of border + inset) — and the display title. */
+    --stage-band: 5.5rem;
+    --frame-top: calc(var(--header-h) + var(--island-inset) * 2 + 2px);
+    --frame-col: calc(58% - var(--island-inset));
+    --title: clamp(2.75rem, 10vw, 4.5rem);
+  }
+  @media (min-width: 64rem) and (prefers-reduced-motion: no-preference) {
+    :root {
+      --title: clamp(3.5rem, 5.6vw, 6.5rem);
+    }
+  }
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    scroll-padding-top: calc(var(--header-h) + 1.5rem);
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    /* keeps the scrollbar's width reserved: without it, locking the scroll for the menu widens the
+       viewport and shifts the header island and the pinned hero sideways */
+    scrollbar-gutter: stable;
+    /* the page never scrolls sideways: see body */
+    overflow-x: clip;
+  }
+  body {
+    /* Nothing on the page is meant to be wider than the screen, but anything that is — a browser
+       extension's 100vw-wide element (100vw counts the scrollbar), a stale pixel width — would
+       otherwise bring a horizontal scrollbar and let a touchpad drag the page sideways. Both rules
+       are needed: on <html> the value goes to the viewport as `hidden`, which still lets the browser
+       scroll sideways by itself (to bring a focused element into view, say); it also stops <body>'s
+       value from being handed to the viewport, so here `clip` really cuts the excess off. `clip`
+       creates no scroll container, so the pinned hero and the fixed header are unaffected. */
+    overflow-x: clip;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--color-orange);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  @media (max-width: 47.99rem) {
+    :root {
+      --header-h: 4rem;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ------------------------------------------------------------------ typography */
+/* The two ends of the text links' line (.link-line, below), registered so they can be animated.
+   At rest the line is empty (its start past its end). */
+@property --link-from {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --link-to {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@layer components {
+  /* small mono labels: indexes, categories, meta */
+  .t-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+  .t-lead {
+    font-size: clamp(1.0625rem, 0.9vw + 0.75rem, 1.3125rem);
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+  }
+
+  /* Text links' hover: the footer's red-and-yellow bar in miniature (its first fifth red, the rest
+     yellow), drawn under the label from the left as the pointer arrives and leaving to the right as
+     it goes. Set on the label inside the <a> or <button>; keyboard focus draws it too. On an inline
+     label it follows the text line after line (a wrapped title is underlined to its last word); the
+     negative margin cancels the padding where the label is a block or flex item, so it never shifts
+     layout. The text keeps its colour: yellow on the light stage would not read as text.
+
+     The line is the stretch between --link-from and --link-to. Arriving, its start is at 0 at once
+     and its end runs to 100%; leaving, its start runs after the end and the end resets once the line
+     is gone. So a pointer that leaves mid-draw sees the drawn part retreat to the right from where it
+     is, instead of jumping (as moving one background would). */
+  .link-line {
+    background-image: linear-gradient(
+      90deg,
+      transparent var(--link-from),
+      var(--color-signal) var(--link-from) calc(var(--link-from) + (var(--link-to) - var(--link-from)) * 0.2),
+      var(--color-comet) 0 var(--link-to),
+      transparent 0
+    );
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 100% 2px;
+    padding-bottom: 0.25em;
+    margin-bottom: -0.25em;
+  }
+  /* hover only where there is a pointer: a tap on a touch screen would leave the line stuck */
+  @media (hover: hover) {
+    :is(a, button):hover .link-line {
+      --link-from: 0%;
+      --link-to: 100%;
+    }
+  }
+  :is(a, button):focus-visible .link-line {
+    --link-from: 0%;
+    --link-to: 100%;
+  }
+  /* the link to the page you are on (menu, footer): its line stays drawn */
+  [aria-current="page"] .link-line {
+    --link-from: 0%;
+    --link-to: 100%;
+  }
+  /* reduced motion: no transitions, the line is simply there or not */
+  @media (prefers-reduced-motion: no-preference) {
+    .link-line {
+      transition:
+        --link-from 0.7s var(--ease-out-expo),
+        --link-to 0s 0.7s;
+    }
+    @media (hover: hover) {
+      :is(a, button):hover .link-line {
+        transition:
+          --link-from 0s,
+          --link-to 0.7s var(--ease-out-expo);
+      }
+    }
+    :is(a, button):focus-visible .link-line {
+      transition:
+        --link-from 0s,
+        --link-to 0.7s var(--ease-out-expo);
+    }
+  }
+  /* Windows High Contrast drops gradient backgrounds: a plain underline, in the system's colours,
+     stands in for the line */
+  @media (forced-colors: active) {
+    @media (hover: hover) {
+      :is(a, button):hover .link-line {
+        text-decoration-line: underline;
+      }
+    }
+    :is(a, button):focus-visible .link-line,
+    [aria-current="page"] .link-line {
+      text-decoration-line: underline;
+    }
+  }
+}
+
+/* Line masks for display type with tight leading: room for accents and descenders. The hero titles
+   use it directly (each line rises out of its own mask); SplitText also generates it at runtime from
+   linesClass "hero-line", which is why it lives outside @layer. */
+.hero-line-mask {
+  padding: 0.1em 0.04em 0.2em;
+  margin: -0.1em -0.04em -0.2em;
+}
+
+/* ------------------------------------------------------------------ motion helpers
+   Items that GSAP reveals start hidden only when JS is running (data-js is set by an inline script
+   before first paint) and never when the user prefers reduced motion. data-reveal-timeout is a
+   safety net set a few seconds later in case scripts fail. */
+html[data-js]:not([data-reveal-timeout]) [data-reveal] {
+  visibility: hidden;
+}
+/* the same selector, so it wins by coming later (a shorter one would lose on specificity: :not()
+   counts its argument) */
+@media (prefers-reduced-motion: reduce) {
+  html[data-js]:not([data-reveal-timeout]) [data-reveal] {
+    visibility: visible;
+  }
+}
+
+/* ------------------------------------------------------------------ pinned hero
+   The three hero slides only stack on top of each other once JS is there to drive the sequence.
+   Gating this on data-js matters: the slides are hidden by [data-reveal], and the 4.5s safety net
+   above drops that rule if scripts never run — without this gate all three services would then be
+   revealed inside the same absolutely-positioned box. In normal flow they simply read one after
+   another, each on its own colour (the dark chapter is a dark band), which is the correct no-JS
+   outcome. Stacked, the slides drop that colour: the stage's layers ([data-hero-layer], swept across
+   by the timeline) paint it instead. Unlayered on purpose, so it wins over the Tailwind utilities.
+   Keep this condition identical to DESKTOP in Hero.tsx. */
+@media (min-width: 64rem) and (prefers-reduced-motion: no-preference) {
+  html[data-js] [data-hero] {
+    height: 100svh;
+  }
+  html[data-js] [data-hero-slide] {
+    position: absolute;
+    inset: 0;
+    background: none;
+  }
+  html[data-js] [data-hero-layer] {
+    display: block;
+  }
+}
+
+/* The 99-of-100 ruler under the environment figure (Fleet.tsx): a 1px tick at the start of every
+   hundredth of the width, in the current colour — whole pixels when the width is a multiple of 100px.
+   The fill layer is clipped to 99 of them; its 100th tick stays faint, so the drawing is the figure. */
+.fleet-ticks {
+  background: linear-gradient(to right, currentColor 1px, transparent 1px) 0 0 / 1% 100% repeat-x;
+}
+
+/* ------------------------------------------------------------------ fleet section (Fleet.tsx)
+   Pinned, the section lays its parts over one screen: the heading in the copy column, the coal panel
+   as a full-screen layer whose clip-path draws its shape (it starts as the frame on the photograph's
+   side, the shape set here so the first paint already matches), the readings in the frame column,
+   the band at the bottom. Otherwise (narrow or short screens, reduced motion, no JS) it is a plain
+   flow of blocks. Unlayered on purpose, so it wins over the flow layout's utilities. Keep this
+   condition identical to FLEET_PINNED in lib/motion-queries.ts.
+   Before hydration data-js is enough (the first paint already has the pinned shape); after the 4.5s
+   safety net only a section the app has set up (data-fleet-ready) keeps it — if the app never runs,
+   the outlined frame would otherwise stay under the panel for good, its two figures never seen. */
+@media (min-width: 64rem) and (min-height: 36rem) and (prefers-reduced-motion: no-preference) {
+  :is(html[data-js]:not([data-reveal-timeout]) [data-fleet], [data-fleet][data-fleet-ready]) {
+    display: block;
+    height: 100svh;
+    padding: 0;
+
+    & [data-fleet-copy],
+    & [data-fleet-echo] {
+      position: absolute;
+      top: calc(var(--frame-top) + var(--fleet-pad));
+      left: 0;
+      width: 42%;
+      margin: 0;
+      padding-inline: var(--gutter);
+    }
+    & [data-fleet-echo] {
+      display: block;
+    }
+    & [data-fleet-panel] {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      margin: 0;
+      border-radius: 0;
+      clip-path: inset(
+        var(--frame-top) var(--island-inset) var(--stage-band) calc(100% - var(--frame-col) - var(--island-inset))
+          round var(--island-radius)
+      );
+    }
+    & [data-fleet-slot] {
+      position: absolute;
+      top: var(--frame-top);
+      bottom: var(--stage-band);
+      right: var(--island-inset);
+      width: var(--frame-col);
+      margin: 0;
+      padding: var(--fleet-pad);
+      /* the rhythm follows the height: at the 36rem floor the outlined frame must still hold both
+         readings, the ruler and the divider (only the figures scaled with it before) */
+      gap: clamp(1rem, 4svh, 2.5rem);
+    }
+    & [data-fleet-ruler] {
+      margin-top: clamp(0.75rem, 2.5svh, 1.75rem);
+    }
+    & [data-fleet-marks] {
+      display: flex;
+    }
+    /* short pinned screens — the usual laptop windows, 576 to 700px tall: smaller figures and padding */
+    @media (max-height: 43.99rem) {
+      --fleet-figure: clamp(4rem, min(10.5vw, 13svh), 13rem);
+      --fleet-pad: clamp(1.25rem, 3svh, 3.5rem);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ presence section (Presence.tsx)
+   With motion, the four flags are one pile, dealt by the scroll (presence-acts.ts): each country lies
+   over the box of the top flag, its caption under the box. The margins leave room for the stair the
+   flags under the top one make (three places up and to the left, 4% of the width each: STEP in
+   presence-acts.ts) and for the caption. Without motion or JS, and on screens under 36rem tall
+   (PRESENCE_STILL), the flags simply sit side by side, each with its caption. Before hydration
+   data-js is enough; after the 4.5s safety net only a section the app has set up
+   (data-presence-ready) keeps the pile. Unlayered on purpose, so it wins over the utilities. Keep
+   this condition the union of PRESENCE_PINNED and PRESENCE_PILE (lib/motion-queries.ts). */
+@media (min-height: 36rem) and (prefers-reduced-motion: no-preference) {
+  :is(html[data-js]:not([data-reveal-timeout]) [data-presence], [data-presence][data-presence-ready]) {
+    & [data-presence-flags] {
+      display: block;
+      position: relative;
+      width: var(--flag-w);
+      max-width: none;
+      aspect-ratio: 3 / 2;
+      margin: calc(var(--flag-w) * 0.12) 0 6.5rem calc(var(--flag-w) * 0.12);
+    }
+    & [data-presence-country] {
+      position: absolute;
+      inset: 0;
+    }
+    & [data-presence-caption] {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      margin: 0;
+      padding-top: 1.25rem;
+    }
+  }
+}
+/* Pinned, the coal panel is the stage's frame: under the island, an inset from the sides, the band
+   under it (on chalk, like the fleet's). Keep this condition identical to PRESENCE_PINNED in
+   lib/motion-queries.ts. */
+@media (min-width: 64rem) and (min-height: 36rem) and (prefers-reduced-motion: no-preference) {
+  :is(html[data-js]:not([data-reveal-timeout]) [data-presence], [data-presence][data-presence-ready]) {
+    height: 100svh;
+    padding: 0;
+
+    & [data-presence-panel] {
+      position: absolute;
+      inset: var(--frame-top) var(--island-inset) var(--stage-band);
+      margin: 0;
+      padding-block: var(--presence-pad);
+    }
+    & [data-presence-marks] {
+      display: flex;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ inner page opening (PageOpening.tsx)
+   The page's first screen comes in as it paints, in CSS alone: no hydration to wait for, so the H1 and
+   the photograph (the LCP) are there at once. The home hero's first chapter in miniature: the label,
+   the title rising out of its line masks, the lead and the index fading up, the photograph opening
+   through the hero's mask (hero-chapters.ts: photoMask("16% 16% 16% 16%") → PHOTO_OPEN) while the
+   picture settles inside it. It plays alongside the header items' own entrance. With reduced motion
+   none of this exists: everything is simply on the page, the photograph fully open. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-page-opening] {
+    & [data-opening-rise] {
+      animation: about-opening-rise 0.9s var(--ease-out-quart) both;
+    }
+    & [data-opening-rise="label"] {
+      animation-delay: 0.15s;
+    }
+    & [data-opening-rise="lead"] {
+      animation-delay: 0.5s;
+    }
+    & [data-opening-rise="index"] {
+      animation-delay: 0.6s;
+    }
+    & [data-opening-line] {
+      animation: about-opening-line 1s var(--ease-out-expo) 0.25s both;
+    }
+    & [data-opening-line="2"] {
+      animation-delay: 0.32s;
+    }
+    & [data-opening-frame] {
+      animation: about-opening-frame 1.3s var(--ease-in-out-quart) 0.2s both;
+    }
+    & [data-opening-photo] {
+      animation: about-opening-settle 1.5s var(--ease-out-quart) 0.2s both;
+    }
+  }
+}
+@keyframes about-opening-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+@keyframes about-opening-line {
+  from {
+    transform: translateY(115%);
+  }
+}
+/* both ends stated: an inset() would not interpolate to `none` */
+@keyframes about-opening-frame {
+  from {
+    clip-path: inset(16% round var(--island-radius));
+  }
+  to {
+    clip-path: inset(0% round var(--island-radius));
+  }
+}
+@keyframes about-opening-settle {
+  from {
+    transform: scale(1.12);
+  }
+}
+
+/* ------------------------------------------------------------------ about: the 1999 — 2020 road (AboutTimeline.tsx)
+   Pinned, the coal panel is the stage's frame, as the presence section's: under the island, an inset
+   from the sides, the band of years under it on chalk. Inside it the list becomes one row of entries,
+   each an equal share of the viewport's width (never the text's), along a road drawn across the
+   panel: the row and the road's comet fill move together (timeline-acts.ts), the reading pin stays
+   one entry in from the panel's padding, where entry 1999's dot starts — so the entry lit at the pin
+   stays whole on screen until the next one reaches it. Otherwise (narrow or short screens, reduced
+   motion, no JS) it is the list down its rail. Unlayered on purpose, so it wins over the list's
+   utilities. Keep this condition identical to TIMELINE_PINNED in lib/motion-queries.ts.
+   Before hydration data-js is enough (the first paint already has the road); after the 4.5s safety
+   net only a section the app has set up (data-timeline-ready) keeps it — if the app never runs, the
+   row would otherwise stay parked on 1999, every milestone after it out of reach. */
+@media (min-width: 64rem) and (min-height: 36rem) and (prefers-reduced-motion: no-preference) {
+  :is(html[data-js]:not([data-reveal-timeout]) [data-timeline], [data-timeline][data-timeline-ready]) {
+    --tl-year: clamp(3rem, 5.5vw, 6rem);
+    --tl-pad: clamp(1.5rem, 4svh, 3rem);
+    /* the road's line, from the top of the row: under the year's mask, in the middle of its own row */
+    --road-y: calc(var(--tl-year) * 0.88 + var(--road-h) / 2);
+    /* where the row starts: entry 1999's dot (0.5rem wide) centred on the reading pin, one entry in
+       from the padding — the room the entry before the pin needs to stay readable */
+    --track-start: calc(var(--tl-pad-x) + var(--entry-w) - 0.25rem);
+    height: 100svh;
+    padding: 0;
+
+    & [data-timeline-panel] {
+      position: absolute;
+      inset: var(--frame-top) var(--island-inset) var(--stage-band);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(1rem, 3svh, 2rem);
+      margin: 0;
+      padding: var(--tl-pad) 0;
+    }
+    & [data-timeline-label] {
+      padding-inline: var(--tl-pad-x);
+    }
+    & [data-timeline-stage] {
+      margin-block: auto;
+      /* the row fades out at the panel's sides instead of being cut by its edge */
+      mask-image: linear-gradient(to right, transparent, #000 var(--tl-pad-x), #000 calc(100% - var(--tl-pad-x)), transparent);
+    }
+    & [data-timeline-road],
+    & [data-timeline-fill] {
+      display: block;
+      position: absolute;
+      top: calc(var(--road-y) - 0.5px);
+    }
+    & [data-timeline-road] {
+      left: 0;
+      right: 0;
+    }
+    /* from the first dot's centre to the last's: the track ends one entry after the last dot */
+    & [data-timeline-fill] {
+      left: calc(var(--track-start) + 0.25rem);
+      right: calc(var(--entry-w) - 0.25rem);
+    }
+    & [data-timeline-pin] {
+      display: block;
+      position: absolute;
+      left: calc(var(--track-start) + 0.25rem - 1px);
+      top: calc(var(--road-y) - 0.75rem);
+      height: 1.5rem;
+    }
+    & [data-timeline-rail] {
+      display: none;
+    }
+    & [data-timeline-track] {
+      width: max-content;
+      padding-left: var(--track-start);
+    }
+    & [data-timeline-list] {
+      flex-direction: row;
+      gap: 0;
+    }
+    & [data-timeline-entry] {
+      display: block;
+      flex: none;
+      width: var(--entry-w);
+      padding: 0 var(--entry-gap) 0 0;
+    }
+    & [data-timeline-dot] {
+      top: calc(var(--road-y) - 0.25rem);
+    }
+    & [data-timeline-text] {
+      margin-top: var(--road-h);
+    }
+    & [data-timeline-title] {
+      max-width: 24ch;
+    }
+    & [data-timeline-line] {
+      max-width: 32ch;
+    }
+    & [data-timeline-marks] {
+      display: flex;
+    }
+    /* short pinned screens — the usual laptop windows, 576 to 700px tall: a smaller year, road and
+       words, so the tallest entry (2020, the longest title) still fits the panel at the 36rem floor */
+    @media (max-height: 43.99rem) {
+      --tl-year: clamp(2.5rem, min(5.5vw, 8svh), 6rem);
+      --road-h: 1.5rem;
+
+      & [data-timeline-title] {
+        font-size: 1.0625rem;
+      }
+      & [data-timeline-line] {
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ cinematic opening
+   The black logo screen (IntroLogo.tsx) only exists when JS runs and motion is allowed — otherwise the
+   page simply starts on the content. Before hydration the header is kept out of the way so it never
+   flashes over the black; once the hero takes over (data-intro-ready) GSAP drives both. The 4.5s
+   safety net (data-reveal-timeout) drops all of this if scripts never run. */
+[data-intro] {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-js]:not([data-reveal-timeout]) [data-intro],
+  html[data-intro-ready] [data-intro] {
+    display: block;
+  }
+  html[data-js]:not([data-reveal-timeout]):not([data-intro-ready]):has([data-intro]) header {
+    visibility: hidden;
+  }
 }
