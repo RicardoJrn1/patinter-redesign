@@ -16,11 +16,12 @@
 // This file owns the markup and the act-0 tweens; Hero.tsx owns the pin and the timeline. With
 // reduced motion (or no JS) the opening is not shown at all: globals.css keeps [data-intro] at
 // display:none and the page starts directly on the content.
-import type { CSSProperties, RefObject } from "react";
+import { ChevronDown } from "lucide-react";
+import { type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { DisintegrationCanvas, type DisintegrationHandle } from "@/components/prototypes/disintegration/DisintegrationCanvas";
 import { LogoMorph, type LogoMorphHandle, type StageBox } from "@/components/prototypes/logo-morph/LogoMorph";
-import { gsap, ScrollTrigger } from "@/lib/gsap";
+import { gsap, prefersReducedMotion, ScrollTrigger, useGSAP } from "@/lib/gsap";
 import { announceHeroOpening } from "@/lib/hero-opening";
 import { MORPH_MARKS } from "@/lib/logo-morph/timeline";
 
@@ -110,6 +111,62 @@ function headerLogoBox(): StageBox | null {
   return { left: at.x, top: at.y, height: img.offsetHeight };
 }
 
+/** How long the opening waits, still on its first frame, before it hints that the page scrolls. */
+const HINT_AFTER = 4000;
+/** Scrolled less than this (px), the page is still on the opening's first frame. */
+const AT_TOP = 4;
+
+/**
+ * For a visitor who stays on the black screen without scrolling (the client's choice: a small arrow,
+ * no words, after 4 seconds): a thin chevron at the bottom of the screen, bobbing gently. It fades in
+ * only while the page is still at its very top and the opening is on (data-intro-ready, which reduced
+ * motion never sets), and fades out as soon as the page moves; back at the top and still again, it
+ * returns. Decorative, like the whole opening: the skip button is the keyboard's way on.
+ */
+function IdleHint() {
+  const [shown, setShown] = useState(false);
+  const arrow = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    let timer = 0;
+    const atStart = () => window.scrollY < AT_TOP && document.documentElement.hasAttribute("data-intro-ready");
+    const wait = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setShown(atStart()), HINT_AFTER);
+    };
+    const onScroll = () => {
+      setShown(false);
+      if (window.scrollY < AT_TOP) wait();
+      else window.clearTimeout(timer);
+    };
+    wait();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  // the bob: down a few pixels and back, on a slow sine (it keeps going while the arrow fades out)
+  useGSAP(() => {
+    if (!arrow.current || prefersReducedMotion()) return;
+    gsap.fromTo(arrow.current, { y: 0 }, { y: 7, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: -1 });
+  });
+
+  return (
+    <div
+      data-intro-hint
+      className={`absolute inset-x-0 bottom-[calc(1.75rem+env(safe-area-inset-bottom))] flex justify-center transition-opacity ease-out ${
+        shown ? "opacity-100 duration-1000" : "opacity-0 duration-300"
+      }`}
+    >
+      <span ref={arrow} className="block text-chalk/70">
+        <ChevronDown strokeWidth={1.5} className="size-7" />
+      </span>
+    </div>
+  );
+}
+
 /** Decorative: the page's h1 lives in the hero as screen-reader text. */
 export function IntroLogo({
   symbol,
@@ -156,6 +213,9 @@ export function IntroLogo({
           </span>
         </div>
       )}
+
+      {/* above the black and the logo: the hint for a visitor who has not scrolled yet */}
+      <IdleHint />
     </div>
   );
 }
